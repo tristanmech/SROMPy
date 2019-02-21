@@ -158,11 +158,11 @@ class Optimizer:
             self.get_errors(optimal_samples, optimal_probabilities)
 
         if verbose and self.cpu_rank == 0:
-            print "\tOptimization time: ", time.time() - t0, "seconds"
-            print "\tFinal SROM errors:"
-            print "\t\tCDF: ", cdf_error
-            print "\t\tMoment: ", moment_error
-            print "\t\tCorrelation: ", correlation_error
+            print("\tOptimization time: ", time.time() - t0, "seconds")
+            print("\tFinal SROM errors:")
+            print("\t\tCDF: ", cdf_error)
+            print("\t\tMoment: ", moment_error)
+            print("\t\tCorrelation: ", correlation_error)
 
         return optimal_samples, optimal_probabilities
 
@@ -235,7 +235,7 @@ class Optimizer:
         num_test_samples_per_cpu = num_test_samples // self.number_CPUs
 
         # Perform sampling, tracking the best results.
-        for i in xrange(num_test_samples_per_cpu):
+        for i in range(num_test_samples_per_cpu):
 
             # Randomly draw new.
             srom_samples = self._target.draw_random_sample(self._srom_size)
@@ -264,10 +264,10 @@ class Optimizer:
             if verbose and self.number_CPUs == 1 and \
                     (i == 0 or (i + 1) % output_interval == 0):
 
-                print "\tIteration %d Objective Function: %s" % \
-                      (i + 1, optimization_result['fun'])
+                print("\tIteration %d Objective Function: %s" % \
+                      (i + 1, optimization_result['fun']))
 
-                print "Optimal:", best_objective_function_result
+                print("Optimal:", best_objective_function_result)
 
         return optimal_samples, optimal_probabilities
 
@@ -325,17 +325,17 @@ class Optimizer:
         """
 
         if self.number_CPUs == 1:
-            print "SROM Sequential Optimizer:"
+            print("SROM Sequential Optimizer:")
 
         elif self.cpu_rank == 0:
-            print "SROM Parallel Optimizer (%s cpus):" % self.number_CPUs
+            print("SROM Parallel Optimizer (%s cpus):" % self.number_CPUs)
 
         if self.cpu_rank == 0 and \
            num_test_samples % self.number_CPUs != 0:
 
-            print "Warning: # test samples not divisible by # CPUs!"
-            print "%s per core, %s total" % \
-                  (num_test_samples // self.number_CPUs, num_test_samples)
+            print("Warning: # test samples not divisible by # CPUs!")
+            print("%s per core, %s total" % \
+                  (num_test_samples // self.number_CPUs, num_test_samples))
 
     def __detect_parallelization(self):
         """
