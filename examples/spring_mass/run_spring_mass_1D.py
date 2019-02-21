@@ -45,7 +45,7 @@ model = SpringMassModel(m, state0=state0, time_step=time_step)
 
 # ----------Monte Carlo------------------
 
-print "Generating Monte Carlo reference solution..."
+print("Generating Monte Carlo reference solution...")
 
 # Generate stiffness input samples for Monte Carlo.
 num_samples = 5000
@@ -61,7 +61,7 @@ monte_carlo_solution = SampleRandomVector(displacement_samples)
 
 # -------------SROM-----------------------
 
-print "Generating SROM for input (stiffness)..."
+print("Generating SROM for input (stiffness)...")
 
 # Generate SROM for random stiffness.
 srom_size = 10
@@ -73,7 +73,7 @@ input_srom.optimize(stiffness_random_variable)
 pp_input = Postprocessor(input_srom, stiffness_random_variable)
 pp_input.compare_cdfs()
 
-print "Computing piecewise constant SROM approximation for output (max disp)..."
+print("Computing piecewise constant SROM approximation for output (max disp)...")
 
 # Run model to get max displacement for each SROM stiffness sample.
 srom_displacements = np.zeros(srom_size)
@@ -90,8 +90,8 @@ pp_output = Postprocessor(output_srom, monte_carlo_solution)
 pp_output.compare_cdfs()
 
 #Compare mean estimates for output:
-print "Monte Carlo mean estimate: ", np.mean(displacement_samples)
-print "SROM mean estimate: ", output_srom.compute_moments(1)[0][0]
+print("Monte Carlo mean estimate: ", np.mean(displacement_samples))
+print("SROM mean estimate: ", output_srom.compute_moments(1)[0][0])
 
 # --------Piecewise LINEAR surrogate with gradient info-------
 
@@ -101,7 +101,7 @@ print "SROM mean estimate: ", output_srom.compute_moments(1)[0][0]
 step_size = 1e-12
 samples_fd = FD.get_perturbed_samples(samples, perturbation_values=[step_size])
 
-print "Computing piecewise linear SROM approximation for output (max disp)..."
+print("Computing piecewise linear SROM approximation for output (max disp)...")
 
 # Run model to get perturbed outputs for FD calc.
 perturbed_displacements = np.zeros(srom_size)
