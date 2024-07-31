@@ -20,6 +20,7 @@ Define stochastic reduced order model (SROM) class
 import copy
 import os
 import numpy as np
+from scipy.special import erf
 
 from SROMPy.optimize import Optimizer
 from SROMPy.target.RandomEntity import RandomEntity
@@ -51,11 +52,20 @@ class SROM(object):
         if dim <= 0:
             raise(ValueError("SROM dimension must be greater than 0."))
 
-        self.size = int(size)
-        self.dim = int(dim)
+        self._size = int(size)
+        self._dim = int(dim)
 
         self.samples = None
         self.probabilities = None
+        self._scale = None  # smooth CDF approximation
+
+    @property
+    def size(self):
+        return self._size
+
+    @property
+    def dim(self):
+        return self._dim
 
     def set_params(self, samples, probabilities):
         """
@@ -89,17 +99,17 @@ class SROM(object):
         # Verify dimensions of samples/probabilities.
         (size, dim) = samples.shape
 
-        if size != self.size and dim != self.dim:
+        if size != self._size and dim != self._dim:
             msg = "SROM samples have wrong dimension, must be (srom_size x dim)"
             raise ValueError(msg)
 
-        if len(probabilities) != self.size:
+        if len(probabilities) != self._size:
             raise ValueError("SROM probabilities must have dim. equal to srom "
                              "size")
 
         self.samples = copy.deepcopy(samples)
         self.probabilities = \
-            copy.deepcopy(probabilities.reshape((self.size, 1)))
+            copy.deepcopy(probabilities.reshape((self._size, 1)))
 
     def get_params(self):
         """
@@ -139,12 +149,12 @@ class SROM(object):
             raise ValueError("Must initialize SROM before computing moments")
 
         max_order = int(max_order)
-        moments = np.zeros((max_order, self.dim))
+        moments = np.zeros((max_order, self._dim))
 
         for q in range(max_order):
 
             # moment_q = sum_{k=1}^m p(k) * x(k)^q.
-            moment_q = np.zeros((1, self.dim))
+            moment_q = np.zeros((1, self._dim))
             for k, sample in enumerate(self.samples):
                 moment_q = moment_q + self.probabilities[k] * pow(sample, q + 1)
 
@@ -162,6 +172,11 @@ class SROM(object):
             different points, but must have same # points for each dimension.
             Size is (# grid pts) x (dim) or (# grid pts) x (1).
         :type x_grid: Numpy array.
+
+        :param sigma: scaling parameter for the smooth CDF approximation. If
+            None, uses the empirical CDF computed from an indicator function.
+            Otherwise, uses the error function approximation.
+        :type sigma: float
 
         Returns: Numpy array of CDF values at x_grid points. Size is (# grid
         pts) x (dim).
@@ -182,10 +197,19 @@ class SROM(object):
         (num_pts, dim) = x_grid.shape
 
         # If only one grid was provided for multiple dims, repeat to generalize.
-        if (dim == 1) and (self.dim > 1):
-            x_grid = np.repeat(x_grid, self.dim, axis=1)
+        if (dim == 1) and (self._dim > 1):
+            x_grid = np.repeat(x_grid, self._dim, axis=1)
 
-        cdf_values = np.zeros((num_pts, self.dim))
+        if self._scale is not None:
+            cdf_values = self._compute_cdf_smooth(num_pts, x_grid, self._scale)
+        else:
+            cdf_values = self._compute_cdf_empirical(num_pts, x_grid)
+
+        return cdf_values
+
+    def _compute_cdf_empirical(self, num_pts, x_grid):
+
+        cdf_values = np.zeros((num_pts, self._dim))
 
         # Vectorized indicator implementation for CDF.
         # CDF(x) = sum_{k=1}^m  1( sample^(k) < x) prob^(k).
@@ -194,6 +218,23 @@ class SROM(object):
 
                 indices = grid >= sample[i]
                 cdf_values[indices, i] += self.probabilities[k]
+
+        return cdf_values
+
+    def _compute_cdf_erf(self, x, d, sigma):
+
+        cdf_value = 0.0
+        for k in range(self._size):
+            cdf_value += 0.5 * self.probabilities[k]*(1.0 + erf((x - self.samples[k, d]) / (np.sqrt(2) * sigma)))
+
+        return cdf_value
+
+    def _compute_cdf_smooth(self, num_pts, x_grid, sigma):
+
+        cdf_values = np.zeros((num_pts, self._dim))
+
+        for i, grid in enumerate(x_grid.T):
+            cdf_values[:, i] = self._compute_cdf_erf(grid, i, sigma=sigma)
 
         return cdf_values
 
@@ -208,7 +249,7 @@ class SROM(object):
         if self.samples is None or self.probabilities is None:
             raise ValueError("Must initialize SROM before computing moments")
 
-        corr = np.zeros((self.dim, self.dim))
+        corr = np.zeros((self._dim, self._dim))
 
         for k, sample in enumerate(self.samples):
             corr = corr + np.outer(sample, sample) * self.probabilities[k]
@@ -224,7 +265,10 @@ class SROM(object):
                  tolerance=None,
                  options=None,
                  method=None,
-                 joint_opt=False):
+                 joint_opt=False,
+                 opt_output_interval=10,
+                 verbose=True,
+                 scale=None):
         """
         Optimize for the SROM samples & probabilities to best match the
         target random vector statistics. The main functionality provided
@@ -258,6 +302,12 @@ class SROM(object):
         :type method: string
         :param joint_opt: Flag to optimize jointly for samples & probabilities.
         :type joint_opt: bool
+        :param opt_output_interval: # iterations to skip before printing output
+        :type opt_output_interval: int
+        :param verbose: flag indicating to print optimization status to stdout
+        :type verbose: bool
+        :param scale: the scale for the smooth CDF approximation
+        :type scale: float
 
         Returns: None. Sets samples/probabilities member variables.
 
@@ -277,19 +327,24 @@ class SROM(object):
             raise TypeError("target_random_variable must inherit from "
                             "RandomEntity.")
 
+        self._scale = scale
         # Use optimizer to form SROM objective func & gradient and minimize:
         opt = Optimizer(target_random_variable,
                         self,
                         weights,
                         error,
                         max_moment,
-                        cdf_grid_pts)
+                        cdf_grid_pts,
+                        joint_opt=joint_opt,
+                        scale=scale)
 
         (samples, probabilities) = opt.get_optimal_params(num_test_samples,
                                                           tolerance,
                                                           options,
                                                           method,
-                                                          joint_opt)
+                                                          joint_opt,
+                                                          opt_output_interval,
+                                                          verbose)
 
         self.set_params(samples, probabilities)
 
@@ -353,7 +408,7 @@ class SROM(object):
         (size, dim) = srom_params.shape
         dim -= 1                        # Account for probabilities in last col.
 
-        if size != self.size and dim != self.dim:
+        if size != self._size and dim != self._dim:
             msg = "Dimension mismatch when loading SROM params from file"
             raise ValueError(msg)
 

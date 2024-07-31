@@ -19,6 +19,7 @@ Class for defining a sample-based random vector with empirical estimators
 
 import numpy as np
 from scipy import interpolate
+from scipy.stats.qmc import Halton, Sobol
 
 from SROMPy.target import RandomVector
 
@@ -58,7 +59,7 @@ class SampleRandomVector(RandomVector):
         self.mins = []
         self.maxs = []
 
-        # Parent class (RandomVector) constructor, sets self.dim.
+        # Parent class (RandomVector) constructor, sets self._dim.
         super(SampleRandomVector, self).__init__(dim)
 
         self._num_samples = num_samples
@@ -69,6 +70,14 @@ class SampleRandomVector(RandomVector):
 
         # Precompute & store statistics so they can be returned quickly later.
         self.generate_statistics(max_moment)
+
+    @property
+    def num_samples(self):
+        return self._num_samples
+
+    @property
+    def samples(self):
+        return self._samples
 
     def compute_moments(self, max_order):
         """
@@ -113,10 +122,10 @@ class SampleRandomVector(RandomVector):
         (num_points, dim) = x_grid.shape
 
         # If only one grid was provided for multiple dims, repeat to generalize.
-        if (dim == 1) and (self.dim > 1):
-            x_grid = np.repeat(x_grid, self.dim, axis=1)
+        if (dim == 1) and (self._dim > 1):
+            x_grid = np.repeat(x_grid, self._dim, axis=1)
 
-        cdf_values = np.zeros((num_points, self.dim))
+        cdf_values = np.zeros((num_points, self._dim))
 
         # Evaluate CDF interpolants on grid.
         for d, grid in enumerate(x_grid.T):
@@ -135,7 +144,7 @@ class SampleRandomVector(RandomVector):
         """
         return self._correlation
 
-    def draw_random_sample(self, sample_size):
+    def draw_random_sample(self, sample_size, qmc_engine=None):
         """
         Randomly draws a sample of this random vector.
 
@@ -149,10 +158,19 @@ class SampleRandomVector(RandomVector):
         if sample_size > self._num_samples:
             raise ValueError("Sample size can't be more than total # samples")
 
-        # Generate random indices for samples array.
-        all_indices = np.arange(self._num_samples)
-        random_indices = np.random.choice(all_indices, sample_size,
-                                          replace=False)
+        if qmc_engine is not None:
+            if qmc_engine == 'Halton':
+                sampler = Halton(d=self._dim)
+                random_indices = sampler.integers(l_bounds=0, u_bounds=self._num_samples, n=sample_size)
+            elif qmc_engine == 'Sobol':
+                sampler = Sobol(d=self._dim)
+                random_indices = sampler.integers(l_bounds=0, u_bounds=self._num_samples, n=sample_size)
+            else:
+                raise ValueError("Invalid QMC engine provided.")
+        else:
+            # Generate random indices for samples array.
+            all_indices = np.arange(self._num_samples)
+            random_indices = np.random.choice(all_indices, sample_size, replace=False)
 
         sample = self._samples[random_indices, :]
 
@@ -166,16 +184,16 @@ class SampleRandomVector(RandomVector):
         tuple with x_grid & CDF values arrays
         """
 
-        x_grid = np.zeros((self._num_samples, self.dim))
-        cdf_values = np.zeros((self._num_samples, self.dim))
+        x_grid = np.zeros((self._num_samples, self._dim))
+        cdf_values = np.zeros((self._num_samples, self._dim))
 
         for i, samples_i in enumerate(self._samples.T):
 
             # Generate empirical CDF:
             sorted_i = np.sort(samples_i)
-            cdf_values = np.arange(1, len(sorted_i) + 1)/float(len(sorted_i))
+            cdf_vals_i = np.arange(1, len(sorted_i) + 1)/float(len(sorted_i))
             x_grid[:, i] = sorted_i
-            cdf_values[:, i] = cdf_values
+            cdf_values[:, i] = cdf_vals_i
 
         return x_grid, cdf_values
 
@@ -195,12 +213,12 @@ class SampleRandomVector(RandomVector):
         on samples. Moments from 1,...,max_order
         """
 
-        self._moments = np.zeros((max_moment, self.dim))
+        self._moments = np.zeros((max_moment, self._dim))
 
         factor = (1./float(self._num_samples))
         for q in range(0, max_moment):
 
-            moment_q = np.zeros((1, self.dim))
+            moment_q = np.zeros((1, self._dim))
             for sample in self._samples:
                 moment_q += factor*np.power(sample, q+1)
 
@@ -241,7 +259,7 @@ class SampleRandomVector(RandomVector):
         """
 
         # TODO - find faster numpy/scipy function
-        self._correlation = np.zeros((self.dim, self.dim))
+        self._correlation = np.zeros((self._dim, self._dim))
 
         factor = (1./float(self._num_samples))
         for sample in self._samples:

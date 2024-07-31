@@ -52,7 +52,7 @@ target = SampleRandomVector(samples)
 
 # Set x limits for each variable based on target:
 x_limits = []
-for i in range(target.dim):
+for i in range(target._dim):
     limits = [np.min(samples[:, i]), np.max(samples[:, i])]
     x_limits.append(limits)
 
@@ -62,7 +62,7 @@ sroms = OrderedDict()
 for srom_size in srom_sizes:
 
     # Generate SROM from file:
-    srom = SROM(srom_size, target.dim)
+    srom = SROM(srom_size, target._dim)
     srom_filename = "srom_m" + str(srom_size) + ".txt"
     srom_filename = os.path.join(srom_dir, srom_filename)
     srom.load_params(srom_filename)
@@ -74,6 +74,7 @@ legend_font_size = 20
 Postprocessor.compare_srom_cdfs(sroms, target, plot_dir="plots",
                                 plot_suffix=plot_suffix,
                                 variable_names=variables,
+                                x_limits=x_limits,
                                 x_ticks=x_ticks,
                                 cdf_y_label=cdf_y_label,
                                 axis_font_size=axis_font_size,

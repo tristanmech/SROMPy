@@ -75,16 +75,19 @@ class AnalyticRandomVector(RandomVector):
         if self._corr.shape[0] != len(random_variables):
             raise ValueError("Dimension mismatch btwn corr mat & random vars")
 
-        # Parent class (RandomVector) constructor, sets self.dim
+        # Parent class (RandomVector) constructor, sets self._dim
         super(AnalyticRandomVector, self).__init__(len(random_variables))
+
+        self._gaussian_corr = None
+        self._unscaled_correlation = None
 
         # Get min/max values for each component.
         self._components = copy.deepcopy(random_variables)
 
-        self.mins = np.zeros(self.dim)
-        self.maxs = np.zeros(self.dim)
+        self.mins = np.zeros(self._dim)
+        self.maxs = np.zeros(self._dim)
 
-        for i in range(self.dim):
+        for i in range(self._dim):
             self.mins[i] = self._components[i].mins[0]
             self.maxs[i] = self._components[i].maxs[0]
 
@@ -93,9 +96,6 @@ class AnalyticRandomVector(RandomVector):
 
         # Generate unscaled correlation that is matched by SROM during opt.
         self.generate_unscaled_correlation()
-
-        self._gaussian_corr = None
-        self._unscaled_correlation = None
 
     @staticmethod
     def verify_correlation_matrix(corr_matrix):
@@ -127,8 +127,8 @@ class AnalyticRandomVector(RandomVector):
         """
 
         # Get moments up to max_ for each component of the vector.
-        moments = np.zeros((max_, self.dim))
-        for i in range(self.dim):
+        moments = np.zeros((max_, self._dim))
+        for i in range(self._dim):
             moments[:, i] = self._components[i].compute_moments(max_).flatten()
 
         return moments
@@ -151,10 +151,10 @@ class AnalyticRandomVector(RandomVector):
         (num_pts, dim) = x_grid.shape
 
         # If only one grid was provided for multiple dims, repeat to generalize.
-        if (dim == 1) and (self.dim > 1):
-            x_grid = np.repeat(x_grid, self.dim, axis=1)
+        if (dim == 1) and (self._dim > 1):
+            x_grid = np.repeat(x_grid, self._dim, axis=1)
 
-        cdf_values = np.zeros((num_pts, self.dim))
+        cdf_values = np.zeros((num_pts, self._dim))
 
         # Evaluate CDF interpolants on grid.
         for d, grid in enumerate(x_grid.T):
@@ -184,20 +184,20 @@ class AnalyticRandomVector(RandomVector):
 
         """
 
-        samples = np.zeros((sample_size, self.dim))
+        samples = np.zeros((sample_size, self._dim))
         cholesky = np.linalg.cholesky(self._gaussian_corr)
 
         # Is there a way to optimize this sampling loop?
         for i in range(sample_size):
 
             # Draw standard std normal random vector with given correlation.
-            normal_vector = cholesky*norm.rvs(size=self.dim)
+            normal_vector = cholesky*norm.rvs(size=self._dim)
 
             # Evaluate std normal CDF at the random vector.
             norm_cdf = norm.cdf(normal_vector)
 
             # Transform by inverse CDF of random vector's components.
-            for j in range(self.dim):
+            for j in range(self._dim):
                 samples[i][j] = \
                     self._components[j].compute_inv_cdf(norm_cdf[j])[0]
 
@@ -246,7 +246,7 @@ class AnalyticRandomVector(RandomVector):
 
         # Try adjusting tolerance to speed this up:
         # 1.49e-8 is default for both.
-        opts = {'epsabs': 1.e-8, 'epsrel': 1e-8}
+        opts = {'epsabs': 1.e-5, 'epsrel': 1e-5}
         e_integral = integrate.nquad(self.integrand_helper, [k_lims, j_lims],
                                      args=(k, j, rho_kj), opts=opts)
 
@@ -268,15 +268,15 @@ class AnalyticRandomVector(RandomVector):
 
         # Want to build interpolant from eta correlation values to rho
         # correlation values.
-        num_points = 15
+        num_points = 12
 
         # -1 made matrix singular
         rho_kj_grid = np.linspace(-0.99, 0.99, num_points)
         eta_jk_grid = np.zeros(num_points)
 
-        for k in range(self.dim):
-            for j in range(k+1, self.dim):
-                print "Determining correlation entry ", k, " ", j
+        for k in range(self._dim):
+            for j in range(k+1, self._dim):
+                print("Determining correlation entry ", k, " ", j)
 
                 # Compute grid of eta/rho pts:
                 for i, rho_kj in enumerate(rho_kj_grid):
@@ -301,8 +301,8 @@ class AnalyticRandomVector(RandomVector):
 
         self._unscaled_correlation = copy.deepcopy(self._corr)
 
-        for i in range(self.dim):
-            for j in range(self.dim):
+        for i in range(self._dim):
+            for j in range(self._dim):
                 mu_i_mu_j = (self._components[i].compute_moments(1)[0] *
                              self._components[j].compute_moments(1)[0])
                 std_i_std_j = (self._components[i].get_variance() *

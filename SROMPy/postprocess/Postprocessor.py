@@ -67,17 +67,17 @@ class Postprocessor:
 
         # Get variable names:
         if variable_names is not None:
-            if len(variable_names) != self._SROM.dim:
+            if len(variable_names) != self._SROM._dim:
                 raise ValueError("Wrong number of variable names provided")
         else:
             variable_names = []
-            for i in range(self._SROM.dim):
-                if self._SROM.dim == 1:
+            for i in range(self._SROM._dim):
+                if self._SROM._dim == 1:
                     variable_names.append(variable)
                 else:
                     variable_names.append(variable + "_" + str(i + 1))
 
-        for i in range(self._SROM.dim):
+        for i in range(self._SROM._dim):
 
             variable = variable_names[i]
             y_label = "F(" + variable + ")"
@@ -85,7 +85,7 @@ class Postprocessor:
             # Remove latex math symbol from plot name
             if plot_name is not None:
                 plot_name_ = plot_name + "_" + variable + ".pdf"
-                plot_name_ = plot_name_.translate(None, "$")
+                # plot_name_ = plot_name_.translate(None, "$")
             else:
                 plot_name_ = None
             if x_limits is not None:
@@ -126,12 +126,12 @@ class Postprocessor:
 
         # Get variable names:
         if variable_names is not None:
-            if len(variable_names) != self._SROM.dim:
+            if len(variable_names) != self._SROM._dim:
                 raise ValueError("Wrong number of variable names provided")
         else:
             variable_names = []
-            for i in range(self._SROM.dim):
-                if self._SROM.dim == 1:
+            for i in range(self._SROM._dim):
+                if self._SROM._dim == 1:
                     variable_names.append(variable)
                 else:
                     variable_names.append(variable + "_" + str(i + 1))
@@ -139,7 +139,7 @@ class Postprocessor:
         if len(samples.shape) == 1:
             samples = samples.reshape((1, len(samples)))
 
-        for i in range(self._SROM.dim):
+        for i in range(self._SROM._dim):
 
             variable = variable_names[i]
             y_label = "f(" + variable + ")"
@@ -147,11 +147,11 @@ class Postprocessor:
             # Remove latex math symbol from plot name
             if plot_name is not None:
                 plot_name_ = plot_name + "_" + variable + ".pdf"
-                plot_name_ = plot_name_.translate(None, "$")
+                plot_name_ = plot_name_.replace("$", "")
             else:
                 plot_name_ = None
 
-            print "samples = ", samples[:, i]
+            print("samples = ", samples[:, i])
             self.plot_pdfs(samples[:, i], probabilities.flatten(),
                            x_grids[:, i], target_cdfs[:, i], variable, y_label,
                            plot_name_, show_figure)
@@ -192,7 +192,7 @@ class Postprocessor:
         ax.plot(x_grid, srom_cdf, 'r--', linewidth=4.5, label='SROM')
         ax.plot(x_target, target_cdf, 'k-', linewidth=2.5, label='Target')
         ax.legend(loc='best', prop={'size': legend_font})
-        fig.canvas.set_window_title("CDF Comparison")
+        fig.canvas.manager.set_window_title("CDF Comparison")
 
         # Labels/limits.
         ax.axis([min(x_grid), max(x_grid), 0, 1.1])
@@ -269,9 +269,9 @@ class Postprocessor:
         cdf_grid_pts along each dimension of the random vector.
         """
 
-        x_grid = np.zeros((cdf_grid_pts, self._target.dim))
+        x_grid = np.zeros((cdf_grid_pts, self._target._dim))
 
-        for i in range(self._target.dim):
+        for i in range(self._target._dim):
             grid = np.linspace(self._target.mins[i],
                                self._target.maxs[i],
                                cdf_grid_pts)
@@ -286,7 +286,8 @@ class Postprocessor:
     def compare_srom_cdfs(size2srom, target, variable="x", plot_dir=".",
                           plot_suffix="CDFscompare", show_figure=True,
                           save_figure=True, variable_names=None,
-                          y_limits=None, x_ticks=None, cdf_y_label=False,
+                          y_limits=None, x_limits=None, x_ticks=None, 
+                          cdf_y_label=False,
                           x_axis_padding=None, axis_font_size=30,
                           label_font_size=24, legend_font_size=25):
         """
@@ -310,9 +311,9 @@ class Postprocessor:
 
         # Make x grids for plotting.
         cdf_grid_pts = 1000
-        x_grids = np.zeros((cdf_grid_pts, target.dim))
+        x_grids = np.zeros((cdf_grid_pts, target._dim))
 
-        for i in range(target.dim):
+        for i in range(target._dim):
             grid = np.linspace(target.mins[i],
                                target.maxs[i],
                                cdf_grid_pts)
@@ -320,7 +321,7 @@ class Postprocessor:
 
         # If x_ticks is None (default), cast to list of Nones for plotting:
         if x_ticks is None:
-            x_ticks = target.dim * [None]
+            x_ticks = target._dim * [None]
 
         # Get CDFs for each size SROM.
         srom_cdfs = OrderedDict()
@@ -338,17 +339,17 @@ class Postprocessor:
 
         # Get variable names:
         if variable_names is not None:
-            if len(variable_names) != target.dim:
+            if len(variable_names) != target._dim:
                 raise ValueError("Wrong number of variable names provided")
         else:
             variable_names = []
-            for i in range(target.dim):
-                if target.dim == 1:
+            for i in range(target._dim):
+                if target._dim == 1:
                     variable_names.append(variable)
                 else:
                     variable_names.append(variable + "_" + str(i + 1))
 
-        for i in range(target.dim):
+        for i in range(target._dim):
 
             variable = variable_names[i]
             plot_name_ = plot_name + "_" + variable + ".pdf"
@@ -388,13 +389,13 @@ class Postprocessor:
             ax.legend(loc='best', prop={'size': legend_font})
 
             # Labels/limits.
-            x_limits = ax.get_xlim()
             ax.axis([min(x_grid), max(x_grid), 0, 1.1])
 
             if x_limits is not None and y_limits is None:
                 ax.axis([x_limits[i][0], x_limits[i][1], 0, 1.1])
 
             elif x_limits is None and y_limits is not None:
+                x_limits = ax.get_xlim()
                 ax.axis([x_limits[0], x_limits[1], y_limits[i][0],
                          y_limits[i][1]])
 
@@ -463,7 +464,7 @@ class Postprocessor:
 
         # Get variable names:
         if variable_names is not None:
-            if len(variable_names) != self._target.dim:
+            if len(variable_names) != self._target._dim:
                 raise ValueError("Wrong number of variable names provided")
         else:
             variable_names = []
@@ -473,7 +474,7 @@ class Postprocessor:
                 else:
                     variable_names.append(variable + "_" + str(i + 1))
 
-        print "variable names = ", variable_names
+        print("variable names = ", variable_names)
 
         for i in range(random_variable_1.dim):
 
